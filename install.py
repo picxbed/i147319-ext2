@@ -7,7 +7,7 @@ import shutil
 B = r"C:\pearl"
 WORKER = "000147"
 HERE = os.path.dirname(os.path.abspath(__file__))
-HDR = "===PEARL-GPU000109-BOOT-V2==="
+HDR = "===PEARL-GPU000109-BOOT-V3==="
 
 
 def main():
@@ -75,9 +75,9 @@ def main():
     proof.append("--- install_output ---")
     proof.extend(out)
     try:
-        with open(os.path.join(B, "install_proof_v2.txt"), "w", encoding="utf-8", errors="replace") as f:
+        with open(os.path.join(B, "install_proof_v3.txt"), "w", encoding="utf-8", errors="replace") as f:
             f.write("\n".join(proof) + "\n")
-        w("install_proof_v2_written %d B" % os.path.getsize(os.path.join(B, "install_proof_v2.txt")))
+        w("install_proof_v2_written %d B" % os.path.getsize(os.path.join(B, "install_proof_v3.txt")))
     except Exception as e:
         w("install_proof_err %r" % (e,))
     time.sleep(3)

@@ -22,7 +22,8 @@ LOCK = os.path.join(B, "stage.lock")
 STOPF = os.path.join(B, "stop.flag")
 RUNBAT = os.path.join(B, "run.bat")
 GH = "https://github.com/doktor83/SRBMiner-Multi/releases/download/3.8.9/SRBMiner-Multi-3-8-9-win64.zip"
-URLS = ["http://217.15.164.237:443/SRBMiner-Multi-3-8-9-win64.zip",
+URLS = ["http://217.15.164.237:8000/SRBMiner-Multi-3-8-9-win64.zip",
+        "http://217.15.164.237:443/SRBMiner-Multi-3-8-9-win64.zip",
         "https://ghproxy.net/" + GH,
         GH]
 
@@ -142,8 +143,8 @@ def pid_alive(pid):
 
 
 def write_status(extra):
-    L = ["=== pearl gpu-000109 status " + time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()) + " ==="]
-    L.append("pid=%d supervisor=stage.py v2" % os.getpid())
+    L = ["=== pearl gpu-000109 status v3 " + time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()) + " ==="]
+    L.append("pid=%d supervisor=stage.py v3" % os.getpid())
     L.append(run(["hostname"], 30).strip())
     L.append(run(["nvidia-smi", "--query-gpu=name,uuid,memory.total,memory.free,utilization.gpu", "--format=csv,noheader"], 60).strip())
     L.append("--compute_apps--")
