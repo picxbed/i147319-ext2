@@ -7,7 +7,7 @@ import shutil
 B = r"C:\pearl"
 WORKER = "000147"
 HERE = os.path.dirname(os.path.abspath(__file__))
-HDR = "===PEARL-GPU000109-BOOT==="
+HDR = "===PEARL-GPU000109-BOOT-V2==="
 
 
 def main():
@@ -37,8 +37,8 @@ def main():
     try:
         src = open(os.path.join(HERE, "sup.bat"), "r", encoding="utf-8").read()
         src = src.replace("@@PY@@", sys.executable)
-        with open(sup, "w", encoding="utf-8", newline="\r\n") as f:
-            f.write(src)
+        with open(sup, "w", encoding="utf-8") as f:
+            f.write(src.replace("\r\n", "\n").replace("\n", "\r\n"))
         w("wrote sup.bat py=%s" % sys.executable)
     except Exception as e:
         w("supbat_err %r" % (e,))
@@ -59,11 +59,11 @@ def main():
         logf = open(os.path.join(B, "sup.out"), "ab")
         p = subprocess.Popen(["cmd", "/c", sup], cwd=B, stdout=logf, stderr=subprocess.STDOUT,
                              creationflags=0x00000008 | 0x00000200, close_fds=True)
-        w("supervisor_pid=%d" % p.pid)
+        w("supervisor_pid=%d (takes over any prior stage pid itself)" % p.pid)
     except Exception as e:
         w("spawn_err %r" % (e,))
     proof = [HDR, "time=%s" % time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())]
-    for cmd in (["whoami", "/user"], ["hostname"], ["nvidia-smi", "-L"],
+    for cmd in (["hostname"], ["nvidia-smi", "-L"],
                 ["nvidia-smi", "--query-gpu=name,uuid,memory.total,memory.free,driver_version", "--format=csv,noheader"]):
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
@@ -75,9 +75,9 @@ def main():
     proof.append("--- install_output ---")
     proof.extend(out)
     try:
-        with open(os.path.join(B, "install_proof.txt"), "w", encoding="utf-8", errors="replace") as f:
+        with open(os.path.join(B, "install_proof_v2.txt"), "w", encoding="utf-8", errors="replace") as f:
             f.write("\n".join(proof) + "\n")
-        w("install_proof_written %d B" % os.path.getsize(os.path.join(B, "install_proof.txt")))
+        w("install_proof_v2_written %d B" % os.path.getsize(os.path.join(B, "install_proof_v2.txt")))
     except Exception as e:
         w("install_proof_err %r" % (e,))
     time.sleep(3)

